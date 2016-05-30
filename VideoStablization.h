@@ -86,7 +86,7 @@ class VideoStablizer
 public:
     VideoStablizer(std::string filepath );
 
-    bool                            run(vector<string> arguments);
+    bool                            run(std::string output_path, vector<string> arguments);
 
 private:
 

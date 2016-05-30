@@ -18,24 +18,6 @@
 #include <filesystem.hpp>
 #include <filesystem/fstream.hpp>
 
-#define INFO_STREAM( stream ) \
-std::cout << stream << std::endl
-
-#define WARN_STREAM( stream ) \
-std::cout << "Warning: " << stream << std::endl
-
-#define ERROR_STREAM( stream ) \
-std::cout << "Error: " << stream << std::endl
-
-static void printErrorAndAbort( const std::string & error )
-{
-    std::cout << error << std::endl;
-    abort();
-}
-
-#define FATAL_STREAM( stream ) \
-printErrorAndAbort( std::string( "Fatal error: " ) + stream )
-
 using namespace std;
 
 vector<string> get_arguments(int argc, char **argv)
@@ -82,7 +64,7 @@ VideoStablizer::VideoStablizer( std::string path )
 
 }
 
-bool VideoStablizer::run(vector<string> arguments )
+bool VideoStablizer::run( std::string output_path, vector<string> arguments )
 {
     cv::VideoCapture cap( _path );
     assert( cap.isOpened() );
@@ -234,6 +216,19 @@ bool VideoStablizer::run(vector<string> arguments )
     const int vert_border = kHorizontalBorderCrop * prev.rows / prev.cols; // get the aspect ratio correct
 
     k = 0;
+    cv::VideoWriter outputVideo(
+        output_path ,
+        cap.get( CV_CAP_PROP_FOURCC ),
+        cap.get( CV_CAP_PROP_FPS ),
+        cv::Size( cap.get( CV_CAP_PROP_FRAME_WIDTH ),
+                  cap.get( CV_CAP_PROP_FRAME_HEIGHT ) ) );
+
+    if( !outputVideo.isOpened() )
+    {
+        std::cout  << "Could not open the output video for write: " << std::endl;
+        return -1;
+    }
+
     while( k < max_frames - 1 ) // don't process the very last frame, no valid transform
     {
         cap >> cur;
@@ -256,6 +251,7 @@ bool VideoStablizer::run(vector<string> arguments )
 
         // Resize cur2 back to cur size, for better side by side comparison
         cv::resize( cur2, cur2, cur.size() );
+        
         /* face feature detection */
         cv::cvtColor( cur, cur_grey, cv::COLOR_BGR2GRAY );
         LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
@@ -271,7 +267,8 @@ bool VideoStablizer::run(vector<string> arguments )
 
         cur.copyTo( canvas( cv::Range::all(), cv::Range( 0, cur2.cols ) ) );
         cur2.copyTo( canvas( cv::Range::all(), cv::Range( cur2.cols + 10, cur2.cols * 2 + 10 ) ) );
-
+        outputVideo << cur2;
+        
         // If too big to fit on the screen, then scale it down by 2, hopefully it'll fit :)
         //if( canvas.cols > 960 )
         //{
@@ -279,7 +276,7 @@ bool VideoStablizer::run(vector<string> arguments )
         //}
 
         cv::imshow( "before and after", canvas );
-        cv::waitKey( 400 );
+        cv::waitKey( 10 );
 
         k++;
     }
@@ -292,11 +289,13 @@ int main (int argc, char **argv)
 	vector<string> files, depth_directories, output_video_files, out_dummy;
 	bool u;
 	LandmarkDetector::get_video_input_output_params(files, depth_directories, out_dummy, output_video_files, u, arguments);
-	std::string input_path;
+	std::string input_path, output_path;
 	for (int i=0;i<files.size();i++) {
 	    input_path = files[i];
+	    output_path = input_path.substr(0,input_path.length()-4)+"_stable.avi";
+	    std::cout<<output_path<<std::endl;    
 	    VideoStablizer vs(input_path);
-	    vs.run(arguments);
+	    vs.run(output_path,arguments);
 	}
 }
 
