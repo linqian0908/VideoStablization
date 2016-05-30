@@ -80,17 +80,19 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     LandmarkDetector::FaceModelParameters det_parameters(arguments);
     LandmarkDetector::CLNF clnf_model(det_parameters.model_location);
     cv::Mat_<float> depth_image;
-
+    cv::Point2d frame_center(prev.cols/2.0,prev.rows/2.0);
     det_parameters.track_gaze = false;
     /* end copy */
     
     // Step 1 - Get previous to current frame transformation (dx, dy, da) for all frames
     std::vector<TransformParam> prev_to_cur_transform; // previous to current
-
-    int k = 1;
+    std::vector< vector<cv::Point2d> > landmarks; // facial landmarks for each frame
+    
+    int k = 0;
     int max_frames = cap.get( cv::CAP_PROP_FRAME_COUNT );
     cv::Mat last_T;
-
+    
+    std::cout << " Step 1: get frame transformation and salient points" << std::endl;
     while( true )
     {
         cap >> cur;
@@ -131,6 +133,10 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
 
         prev_to_cur_transform.push_back( TransformParam( dx, dy, da ) );
         
+        LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
+        landmarks.push_back(LandmarkDetector::CalculateLandmarks(clnf_model));
+        
+        
         cur.copyTo( prev );
         cur_grey.copyTo( prev_grey );
 
@@ -139,11 +145,16 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
 
     // Step 2 - Accumulate the transformations to get the image trajectory
     // Accumulated frame to frame transform
+    std::cout << " Step 2: accumulate path and average salient features" << std::endl;
     double a = 0;
     double x = 0;
     double y = 0;
-
+    cv::Point2d point_zero(0.0,0.0);
+    cv::Point2d point_sum;
+    
     std::vector<Trajectory> trajectory; // trajectory at all frames
+    std::vector<cv::Point2d> landmarks_avg;
+    
     for( size_t i = 0; i < prev_to_cur_transform.size(); i++ )
     {
         x += prev_to_cur_transform[i]._dx;
@@ -151,9 +162,13 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         a += prev_to_cur_transform[i]._da;
 
         trajectory.push_back( Trajectory( x, y, a ) );
+        
+        point_sum = std::accumulate(landmarks[i].begin(),landmarks[i].end(),point_zero);
+        landmarks_avg.push_back(point_sum*(1.0/landmarks[i].size()));
     }
 
     // Step 3 - Smooth out the trajectory using an averaging window
+    std::cout << " Step 3: trajectory smoothing" << std::endl;
     std::vector<Trajectory> smoothed_trajectory; // trajectory at all frames
 
     for( size_t i = 0; i < trajectory.size(); i++ )
@@ -178,11 +193,26 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         double avg_a = sum_a / count;
         double avg_x = sum_x / count;
         double avg_y = sum_y / count;
-
+        
+        cv::Point2d avg_fxy(0.0,0.0);
+        count = 0;
+        for (int j=-fSmoothingRadius; j<= fSmoothingRadius; j++) {
+            if (i+j>=0 && i+j<landmarks_avg.size()) {
+                avg_fxy += landmarks_avg[i+j];
+                count++;
+            }
+        }
+        
+        avg_fxy *= (1.0/count);
+        avg_fxy -= frame_center;
+        
+        avg_x = avg_x*(1-SmoothRatio) - avg_fxy.x*SmoothRatio;
+        avg_y = avg_y*(1-SmoothRatio) - avg_fxy.y*SmoothRatio;
         smoothed_trajectory.push_back( Trajectory( avg_x, avg_y, avg_a ) );
     }
 
     // Step 4 - Generate new set of previous to current transform, such that the trajectory ends up being the same as the smoothed trajectory
+    std::cout << " Step 4: generate new transformations" << std::endl;
     std::vector<TransformParam> new_prev_to_cur_transform;
 
     // Accumulated frame to frame transform
@@ -209,7 +239,8 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
 
     }
 
-    // Step 5 - Apply the new transformation to the video
+    // Step 5 - Apply the new transformation to the video    
+    std::cout << " Step 5: applied transformation to video" << std::endl;
     cap.set( cv::CAP_PROP_POS_FRAMES, 0 );
     cv::Mat T( 2, 3, CV_64F );
 
@@ -276,7 +307,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         //}
 
         cv::imshow( "before and after", canvas );
-        cv::waitKey( 10 );
+        //cv::waitKey( 10 );
 
         k++;
     }

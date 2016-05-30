@@ -95,7 +95,9 @@ private:
     std::string                     _path;
     int                             _num_frames;
 
-    const int kSmoothingRadius = 10;        // Large values give more stable video, but less flexible to sudden panning
+    const int kSmoothingRadius = 20;        // Large values give more stable video, but less flexible to sudden panning
+    const int fSmoothingRadius = 5;
+    const double SmoothRatio = 0.1;
     const int kHorizontalBorderCrop = 20;  // Crops the border to reduce missing pixels.
 };
 
