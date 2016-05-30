@@ -98,7 +98,8 @@ private:
     const int kSmoothingRadius = 20;        // Large values give more stable video, but less flexible to sudden panning
     const int fSmoothingRadius = 5;
     const double SmoothRatio = 0.9; // SmoothRatio=1 tries to keep face at center; 0 uses pure path smoothing
-    const int kHorizontalBorderCrop = 20;  // Crops the border to reduce missing pixels.
+    const double kHorizontalCropRatio = 0.1;
+    const double kVertialCropRatio = 0.1;
 };
 
 #endif // VIDEOSTAB_H

@@ -73,14 +73,19 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     cv::Mat prev, prev_grey;
 
     cap >> prev;//get the first frame.ch
+    int image_width = prev.cols;
+    int image_height = prev.rows;
     cv::cvtColor( prev, prev_grey, cv::COLOR_BGR2GRAY );
+    int kHorizontalBorderCrop = int(image_width*kHorizontalCropRatio);  // Crops the border to reduce missing pixels.
+    int kVerticalBorderCrop = int(image_height*kVertialCropRatio);
+    
     
     /* copied from FaceLandmarkVid.cpp */
     // facial landmark tracking
     LandmarkDetector::FaceModelParameters det_parameters(arguments);
     LandmarkDetector::CLNF clnf_model(det_parameters.model_location);
     cv::Mat_<float> depth_image;
-    cv::Point2d frame_center(prev.cols/2.0,prev.rows/2.0);
+    cv::Point2d frame_center(image_width/2.0,image_height/2.0);
     det_parameters.track_gaze = false;
     /* end copy */
     
@@ -91,6 +96,12 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     int k = 0;
     int max_frames = cap.get( cv::CAP_PROP_FRAME_COUNT );
     cv::Mat last_T;
+    
+    
+    std::cout << "Image width: " << image_width << std::endl;
+    std::cout << "Image height: " << image_height <<std::endl;    
+    std::cout << "Crop width: " << kHorizontalBorderCrop << std::endl;
+    std::cout << "Crop height: " << kVerticalBorderCrop <<std::endl;
     
     std::cout << " Step 1: get frame transformation and salient points" << std::endl;
     while( true )
@@ -250,8 +261,6 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     cap.set( cv::CAP_PROP_POS_FRAMES, 0 );
     cv::Mat T( 2, 3, CV_64F );
 
-    const int vert_border = kHorizontalBorderCrop * prev.rows / prev.cols; // get the aspect ratio correct
-
     k = 0;
     cv::VideoWriter outputVideo(
         output_path ,
@@ -283,7 +292,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
 
         cv::warpAffine( cur, cur2, T, cur.size() );
 
-        cur2 = cur2( cv::Range( vert_border, cur2.rows - vert_border ),
+        cur2 = cur2( cv::Range( kVerticalBorderCrop, cur2.rows - kVerticalBorderCrop ),
                      cv::Range( kHorizontalBorderCrop, cur2.cols - kHorizontalBorderCrop ) );
 
         // Resize cur2 back to cur size, for better side by side comparison
