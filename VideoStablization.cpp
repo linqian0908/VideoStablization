@@ -535,11 +535,25 @@ cv::Mat& visualise_tracking(cv::Mat& captured_image, const LandmarkDetector::CLN
 
                 vis_certainty = (vis_certainty + 1) / (visualisation_boundary + 1);
         }
+        
         return captured_image;
 }
 
-VideoStablizer::VideoStablizer( std::string path, double salient )
-    : _path( path ), SmoothRatio(salient)
+// Visualising the results
+cv::Mat& visualise_frame(cv::Mat& captured_image)
+{        
+        // draw center and box
+        cv::Point p1(0,0);
+        cv::Point p2(captured_image.cols,captured_image.rows);
+        cv::Point pc = (p1+p2)*0.5;
+        cv::rectangle(captured_image,p1,p2,cv::Scalar(0,255,0),5);
+        cv::circle(captured_image,pc,3,cv::Scalar(0,255,0),3);
+        
+        return captured_image;
+}
+
+VideoStablizer::VideoStablizer( std::string path, double salient, double crop, int pathradius, int faceradius)
+    : _path( path ), SmoothRatio(salient), CropRatio(crop), kSmoothingRadius(pathradius),fSmoothingRadius(faceradius)
 {
 
 }
@@ -556,15 +570,9 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     int image_width = prev.cols;
     int image_height = prev.rows;
     cv::cvtColor( prev, prev_grey, cv::COLOR_BGR2GRAY );
-    int kHorizontalBorderCrop = int(image_width*kHorizontalCropRatio);  // Crops the border to reduce missing pixels.
-    int kVerticalBorderCrop = int(image_height*kVertialCropRatio);
-    
-    bool use_salient = (SmoothRatio>0.01);
-    if (use_salient) {
-        std::cout << "Using facial landmark with weight " << SmoothRatio << std::endl;
-    } else {
-        std::cout << "Not using facial landmark." << std::endl;
-    }
+    int kHorizontalBorderCrop = int(image_width*CropRatio);  // Crops the border to reduce missing pixels.
+    int kVerticalBorderCrop = int(image_height*CropRatio);
+
     /* copied from FaceLandmarkVid.cpp */
     // facial landmark tracking
  
@@ -589,6 +597,15 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     std::cout << "Image height: " << image_height <<std::endl;    
     std::cout << "Crop width: " << kHorizontalBorderCrop << std::endl;
     std::cout << "Crop height: " << kVerticalBorderCrop <<std::endl;
+    std::cout << "Path smoothing radius: " << kSmoothingRadius <<std::endl;
+    std::cout << "Face smoothing radius: " << fSmoothingRadius <<std::endl;
+    
+    bool use_salient = (SmoothRatio>0.01);
+    if (use_salient) {
+        std::cout << "Using facial landmark with weight " << SmoothRatio << std::endl;
+    } else {
+        std::cout << "Not using facial landmark. " << SmoothRatio << std::endl;
+    }
     
     std::cout << " Step 1: get frame transformation and salient points" << std::endl;
     while( true )
@@ -786,7 +803,17 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         cap.get( CV_CAP_PROP_FPS ),
         cv::Size( cap.get( CV_CAP_PROP_FRAME_WIDTH ),
                   cap.get( CV_CAP_PROP_FRAME_HEIGHT ) ) );
-
+    std::cout << " Writing stablized video to: " << output_path << std::endl;
+         
+    std::string double_path = _path.substr(0,_path.length()-4)+"_double.avi";
+    cv::VideoWriter doubleVideo(
+        double_path ,
+        cap.get( CV_CAP_PROP_FOURCC ),
+        cap.get( CV_CAP_PROP_FPS ),
+        cv::Size( cap.get( CV_CAP_PROP_FRAME_WIDTH )*2+10,
+                  cap.get( CV_CAP_PROP_FRAME_HEIGHT ) ) );
+    std::cout << " Writing both videos to: " << double_path << std::endl;
+    
     if( !outputVideo.isOpened() )
     {
         std::cout  << "Could not open the output video for write: " << std::endl;
@@ -815,6 +842,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
 
         // Resize cur2 back to cur size, for better side by side comparison
         cv::resize( cur2, cur2, cur.size() );
+        outputVideo << cur2;
         
         /* face feature detection */
         if (use_salient) {
@@ -822,18 +850,21 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
             LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
             cur = visualise_tracking(cur, clnf_model, det_parameters);
             
-            //cv::cvtColor( cur2, cur_grey, cv::COLOR_BGR2GRAY );
-            //LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
-            //cur2 = visualise_tracking(cur2, clnf_model, det_parameters); 
+            cv::cvtColor( cur2, cur_grey, cv::COLOR_BGR2GRAY );
+            LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
+            cur2 = visualise_tracking(cur2, clnf_model, det_parameters); 
         }       
         /* end face feature detection */
         
         // Now draw the original and stablised side by side for coolness
         cv::Mat canvas = cv::Mat::zeros( cur.rows, cur.cols * 2 + 10, cur.type() );
-
+        cur = visualise_frame(cur);
+        cur2 = visualise_frame(cur2);
+        
         cur.copyTo( canvas( cv::Range::all(), cv::Range( 0, cur2.cols ) ) );
         cur2.copyTo( canvas( cv::Range::all(), cv::Range( cur2.cols + 10, cur2.cols * 2 + 10 ) ) );
-        outputVideo << cur2;
+             
+        doubleVideo << canvas;
         
         // If too big to fit on the screen, then scale it down by 2, hopefully it'll fit :)
         //if( canvas.cols > 960 )
@@ -853,13 +884,33 @@ int main (int argc, char **argv)
 {
 	vector<string> arguments = get_arguments(argc, argv);
 	double SmoothRatio = 0; // SmoothRatio=1 tries to keep face at center; 0 uses pure path smoothing
+	double crop = 0.1;
+	int kSmoothingRadius = 20;
+	int fSmoothingRadius = 5;
+	
 	for (size_t i=0;i<arguments.size();i++) {
 	    if (arguments[i].compare("-salient")==0) {
 	        stringstream data(arguments[i+1]);
 	        data >> SmoothRatio;
-			break;	        
+	        i++;
+	    }
+	    if (arguments[i].compare("-crop")==0) {
+	        stringstream data(arguments[i+1]);
+	        data >> crop;
+	        i++;
+	    }
+	    if (arguments[i].compare("-pathsmooth")==0) {
+	        stringstream data(arguments[i+1]);
+	        data >> kSmoothingRadius;
+	        i++;
+	    }	    
+	    if (arguments[i].compare("-facesmooth")==0) {
+	        stringstream data(arguments[i+1]);
+	        data >> fSmoothingRadius;
+	        i++;
 	    }
 	}
+	
 	vector<string> files, depth_directories, output_video_files, out_dummy;
 	bool u;
 	LandmarkDetector::get_video_input_output_params(files, depth_directories, out_dummy, output_video_files, u, arguments);
@@ -868,7 +919,7 @@ int main (int argc, char **argv)
 	    input_path = files[i];
 	    output_path = input_path.substr(0,input_path.length()-4)+"_stable.avi";
 	    std::cout<<output_path<<std::endl;    
-	    VideoStablizer vs(input_path,SmoothRatio);
+	    VideoStablizer vs(input_path,SmoothRatio,crop,kSmoothingRadius,fSmoothingRadius);
 	    vs.run(output_path,arguments);
 	}
 }
