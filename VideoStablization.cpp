@@ -55,6 +55,20 @@ cv::Mat& visualise_tracking(cv::Mat& captured_image, const LandmarkDetector::CLN
 
                 vis_certainty = (vis_certainty + 1) / (visualisation_boundary + 1);
         }
+        
+        return captured_image;
+}
+
+// Visualising the results
+cv::Mat& visualise_frame(cv::Mat& captured_image)
+{        
+        // draw center and box
+        cv::Point p1(0,0);
+        cv::Point p2(captured_image.cols,captured_image.rows);
+        cv::Point pc = (p1+p2)*0.5;
+        cv::rectangle(captured_image,p1,p2,cv::Scalar(0,255,0),5);
+        cv::circle(captured_image,pc,3,cv::Scalar(0,255,0),3);
+        
         return captured_image;
 }
 
@@ -78,13 +92,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     cv::cvtColor( prev, prev_grey, cv::COLOR_BGR2GRAY );
     int kHorizontalBorderCrop = int(image_width*kHorizontalCropRatio);  // Crops the border to reduce missing pixels.
     int kVerticalBorderCrop = int(image_height*kVertialCropRatio);
-    
-    bool use_salient = (SmoothRatio>0.01);
-    if (use_salient) {
-        std::cout << "Using facial landmark with weight " << SmoothRatio << std::endl;
-    } else {
-        std::cout << "Not using facial landmark." << std::endl;
-    }
+
     /* copied from FaceLandmarkVid.cpp */
     // facial landmark tracking
  
@@ -109,6 +117,13 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     std::cout << "Image height: " << image_height <<std::endl;    
     std::cout << "Crop width: " << kHorizontalBorderCrop << std::endl;
     std::cout << "Crop height: " << kVerticalBorderCrop <<std::endl;
+        
+    bool use_salient = (SmoothRatio>0.01);
+    if (use_salient) {
+        std::cout << "Using facial landmark with weight " << SmoothRatio << std::endl;
+    } else {
+        std::cout << "Not using facial landmark. " << SmoothRatio << std::endl;
+    }
     
     std::cout << " Step 1: get frame transformation and salient points" << std::endl;
     while( true )
@@ -280,7 +295,17 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         cap.get( CV_CAP_PROP_FPS ),
         cv::Size( cap.get( CV_CAP_PROP_FRAME_WIDTH ),
                   cap.get( CV_CAP_PROP_FRAME_HEIGHT ) ) );
-
+    std::cout << " Writing stablized video to: " << output_path << std::endl;
+         
+    std::string double_path = _path.substr(0,_path.length()-4)+"_double.avi";
+    cv::VideoWriter doubleVideo(
+        double_path ,
+        cap.get( CV_CAP_PROP_FOURCC ),
+        cap.get( CV_CAP_PROP_FPS ),
+        cv::Size( cap.get( CV_CAP_PROP_FRAME_WIDTH )*2+10,
+                  cap.get( CV_CAP_PROP_FRAME_HEIGHT ) ) );
+    std::cout << " Writing both videos to: " << double_path << std::endl;
+    
     if( !outputVideo.isOpened() )
     {
         std::cout  << "Could not open the output video for write: " << std::endl;
@@ -309,6 +334,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
 
         // Resize cur2 back to cur size, for better side by side comparison
         cv::resize( cur2, cur2, cur.size() );
+        outputVideo << cur2;
         
         /* face feature detection */
         if (use_salient) {
@@ -316,18 +342,21 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
             LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
             cur = visualise_tracking(cur, clnf_model, det_parameters);
             
-            //cv::cvtColor( cur2, cur_grey, cv::COLOR_BGR2GRAY );
-            //LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
-            //cur2 = visualise_tracking(cur2, clnf_model, det_parameters); 
+            cv::cvtColor( cur2, cur_grey, cv::COLOR_BGR2GRAY );
+            LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
+            cur2 = visualise_tracking(cur2, clnf_model, det_parameters); 
         }       
         /* end face feature detection */
         
         // Now draw the original and stablised side by side for coolness
         cv::Mat canvas = cv::Mat::zeros( cur.rows, cur.cols * 2 + 10, cur.type() );
-
+        cur = visualise_frame(cur);
+        cur2 = visualise_frame(cur2);
+        
         cur.copyTo( canvas( cv::Range::all(), cv::Range( 0, cur2.cols ) ) );
         cur2.copyTo( canvas( cv::Range::all(), cv::Range( cur2.cols + 10, cur2.cols * 2 + 10 ) ) );
-        outputVideo << cur2;
+             
+        doubleVideo << canvas;
         
         // If too big to fit on the screen, then scale it down by 2, hopefully it'll fit :)
         //if( canvas.cols > 960 )
