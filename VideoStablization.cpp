@@ -696,6 +696,8 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     std::vector<float> Tx_smooth;
     std::vector<float> Ty_smooth;
     std::vector<float> Ta_smooth;
+    std::vector<float> Tfx;
+    std::vector<float> Tfy;
 
     for( size_t i = 0; i < trajectory.size(); i++ )
     {
@@ -738,7 +740,8 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
             sum_y /= count;
             avg_fxy *= (1.0/count);
             avg_fxy -= frame_center;
-            
+            Tfx.push_back(avg_fxy.x);
+            Tfy.push_back(avg_fxy.y);
             avg_x = avg_x*(1-SmoothRatio) + (sum_x-avg_fxy.x)*SmoothRatio;
             avg_y = avg_y*(1-SmoothRatio) + (sum_y-avg_fxy.y)*SmoothRatio;
         }
@@ -746,6 +749,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         Tx_smooth.push_back(avg_x);
         Ty_smooth.push_back(avg_y);
         Ta_smooth.push_back(avg_a);
+
     }
 
     // show Trajectory( x, y, a ), 2D or 3D image with respect to time
@@ -757,11 +761,12 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     CvPlot::label("Before");
     CvPlot::plot("track_y", &Ty_smooth[0], Ty_smooth.size(), 1, 0, 0, 255);
     CvPlot::label("After");
-    CvPlot::plot("track_a", &Ta[0], Ta.size(), 1, 255, 0, 0);
+    CvPlot::plot("track_angle", &Ta[0], Ta.size(), 1, 255, 0, 0);
     CvPlot::label("Before");
-    CvPlot::plot("track_a", &Ta_smooth[0], Ta_smooth.size(), 1, 0, 0, 255);
+    CvPlot::plot("track_angle", &Ta_smooth[0], Ta_smooth.size(), 1, 0, 0, 255);
     CvPlot::label("After");
-    cv::waitKey( 40000 );
+
+    cv::waitKey( 14000 );
 
     // Step 4 - Generate new set of previous to current transform, such that the trajectory ends up being the same as the smoothed trajectory
     std::cout << " Step 4: generate new transformations" << std::endl;
@@ -820,6 +825,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         return -1;
     }
 
+    std::vector< vector<cv::Point2d> > landmarks_after; // facial landmarks for each frame after smoothing
     while( k < max_frames - 1 ) // don't process the very last frame, no valid transform
     {
         cap >> cur;
@@ -853,9 +859,12 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
             cv::cvtColor( cur2, cur_grey, cv::COLOR_BGR2GRAY );
             LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
             cur2 = visualise_tracking(cur2, clnf_model, det_parameters); 
+
+            // Calculate average and get the center of face, then plot
+            landmarks_after.push_back(LandmarkDetector::CalculateLandmarks(clnf_model));
         }       
         /* end face feature detection */
-        
+
         // Now draw the original and stablised side by side for coolness
         cv::Mat canvas = cv::Mat::zeros( cur.rows, cur.cols * 2 + 10, cur.type() );
         cur = visualise_frame(cur);
@@ -876,6 +885,49 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         cv::waitKey( 3 );
 
         k++;
+    }
+
+    // Step 6 - Plot the center of face after smoothing
+    if (use_salient) {
+
+        std::cout << " Step 6: Plot the center of face after smoothing" << std::endl;
+        cv::Point2d point_sum_after;
+        std::vector<cv::Point2d> landmarks_avg_after;
+        std::vector<float> Tfx_after;
+        std::vector<float> Tfy_after;
+        for( size_t i = 0; i < new_prev_to_cur_transform.size(); i++ )
+        {
+            point_sum_after = std::accumulate(landmarks_after[i].begin(),landmarks_after[i].end(),point_zero);
+            landmarks_avg_after.push_back(point_sum_after*(1.0/landmarks_after[i].size()));
+
+        }
+        for( size_t i = 0; i < new_prev_to_cur_transform.size(); i++ )
+        {
+            int count = 0;
+            cv::Point2d avg_fxy_after(0.0,0.0);
+
+            for (int j=-fSmoothingRadius; j<= fSmoothingRadius; j++) {
+                if (i+j>=0 && i+j<landmarks_avg_after.size()) {
+                    avg_fxy_after += landmarks_avg_after[i+j];
+                    count++;
+                }
+            }
+
+            avg_fxy_after *= (1.0/count);
+            avg_fxy_after -= frame_center;    // define new
+            Tfx_after.push_back(avg_fxy_after.x);
+            Tfy_after.push_back(avg_fxy_after.y);
+        }
+
+        CvPlot::plot("track_face_x", &Tfx[0], Tfx.size(), 1, 255, 0, 0);
+        CvPlot::label("Before");
+        CvPlot::plot("track_face_x", &Tfx_after[0], Tfx_after.size(), 1, 0, 0, 255);
+        CvPlot::label("After");
+        CvPlot::plot("track_face_y", &Tfy[0], Tfy.size(), 1, 255, 0, 0);
+        CvPlot::label("Before");
+        CvPlot::plot("track_face_y", &Tfy_after[0], Tfy_after.size(), 1, 0, 0, 255);
+        CvPlot::label("After");
+        cv::waitKey( 14000 );
     }
     return 0;
 }
