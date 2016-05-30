@@ -72,8 +72,8 @@ cv::Mat& visualise_frame(cv::Mat& captured_image)
         return captured_image;
 }
 
-VideoStablizer::VideoStablizer( std::string path, double salient )
-    : _path( path ), SmoothRatio(salient)
+VideoStablizer::VideoStablizer( std::string path, double salient, double crop, int pathradius, int faceradius)
+    : _path( path ), SmoothRatio(salient), CropRatio(crop), kSmoothingRadius(pathradius),fSmoothingRadius(faceradius)
 {
 
 }
@@ -90,8 +90,8 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     int image_width = prev.cols;
     int image_height = prev.rows;
     cv::cvtColor( prev, prev_grey, cv::COLOR_BGR2GRAY );
-    int kHorizontalBorderCrop = int(image_width*kHorizontalCropRatio);  // Crops the border to reduce missing pixels.
-    int kVerticalBorderCrop = int(image_height*kVertialCropRatio);
+    int kHorizontalBorderCrop = int(image_width*CropRatio);  // Crops the border to reduce missing pixels.
+    int kVerticalBorderCrop = int(image_height*CropRatio);
 
     /* copied from FaceLandmarkVid.cpp */
     // facial landmark tracking
@@ -117,7 +117,9 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     std::cout << "Image height: " << image_height <<std::endl;    
     std::cout << "Crop width: " << kHorizontalBorderCrop << std::endl;
     std::cout << "Crop height: " << kVerticalBorderCrop <<std::endl;
-        
+    std::cout << "Path smoothing radius: " << kSmoothingRadius <<std::endl;
+    std::cout << "Face smoothing radius: " << fSmoothingRadius <<std::endl;
+    
     bool use_salient = (SmoothRatio>0.01);
     if (use_salient) {
         std::cout << "Using facial landmark with weight " << SmoothRatio << std::endl;
@@ -376,13 +378,33 @@ int main (int argc, char **argv)
 {
 	vector<string> arguments = get_arguments(argc, argv);
 	double SmoothRatio = 0; // SmoothRatio=1 tries to keep face at center; 0 uses pure path smoothing
+	double crop = 0.1;
+	int kSmoothingRadius = 20;
+	int fSmoothingRadius = 5;
+	
 	for (size_t i=0;i<arguments.size();i++) {
 	    if (arguments[i].compare("-salient")==0) {
 	        stringstream data(arguments[i+1]);
 	        data >> SmoothRatio;
-			break;	        
+	        i++;
+	    }
+	    if (arguments[i].compare("-crop")==0) {
+	        stringstream data(arguments[i+1]);
+	        data >> crop;
+	        i++;
+	    }
+	    if (arguments[i].compare("-pathsmooth")==0) {
+	        stringstream data(arguments[i+1]);
+	        data >> kSmoothingRadius;
+	        i++;
+	    }	    
+	    if (arguments[i].compare("-facesmooth")==0) {
+	        stringstream data(arguments[i+1]);
+	        data >> fSmoothingRadius;
+	        i++;
 	    }
 	}
+	
 	vector<string> files, depth_directories, output_video_files, out_dummy;
 	bool u;
 	LandmarkDetector::get_video_input_output_params(files, depth_directories, out_dummy, output_video_files, u, arguments);
@@ -391,7 +413,7 @@ int main (int argc, char **argv)
 	    input_path = files[i];
 	    output_path = input_path.substr(0,input_path.length()-4)+"_stable.avi";
 	    std::cout<<output_path<<std::endl;    
-	    VideoStablizer vs(input_path,SmoothRatio);
+	    VideoStablizer vs(input_path,SmoothRatio,crop,kSmoothingRadius,fSmoothingRadius);
 	    vs.run(output_path,arguments);
 	}
 }
