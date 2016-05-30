@@ -196,18 +196,24 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         
         cv::Point2d avg_fxy(0.0,0.0);
         count = 0;
+        sum_x = 0;
+        sum_y = 0;
         for (int j=-fSmoothingRadius; j<= fSmoothingRadius; j++) {
             if (i+j>=0 && i+j<landmarks_avg.size()) {
+                sum_x += trajectory[i+j]._x;
+                sum_y += trajectory[i+j]._y;
                 avg_fxy += landmarks_avg[i+j];
                 count++;
             }
         }
         
+        sum_x /= count;
+        sum_y /= count;
         avg_fxy *= (1.0/count);
         avg_fxy -= frame_center;
         
-        avg_x = avg_x*(1-SmoothRatio) - avg_fxy.x*SmoothRatio;
-        avg_y = avg_y*(1-SmoothRatio) - avg_fxy.y*SmoothRatio;
+        avg_x = avg_x*(1-SmoothRatio) + (sum_x-avg_fxy.x)*SmoothRatio;
+        avg_y = avg_y*(1-SmoothRatio) + (sum_y-avg_fxy.y)*SmoothRatio;
         smoothed_trajectory.push_back( Trajectory( avg_x, avg_y, avg_a ) );
     }
 
@@ -307,7 +313,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         //}
 
         cv::imshow( "before and after", canvas );
-        //cv::waitKey( 10 );
+        cv::waitKey( 3 );
 
         k++;
     }
