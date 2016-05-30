@@ -84,7 +84,7 @@ struct Trajectory
 class VideoStablizer
 {
 public:
-    VideoStablizer(std::string filepath );
+    VideoStablizer(std::string filepath, double salient );
 
     bool                            run(std::string output_path, vector<string> arguments);
 
@@ -94,10 +94,10 @@ private:
 
     std::string                     _path;
     int                             _num_frames;
-
+    double                          SmoothRatio; // SmoothRatio=1 tries to keep face at center; 0 uses pure path smoothing
+    
     const int kSmoothingRadius = 20;        // Large values give more stable video, but less flexible to sudden panning
-    const int fSmoothingRadius = 5;
-    const double SmoothRatio = 0.9; // SmoothRatio=1 tries to keep face at center; 0 uses pure path smoothing
+    const int fSmoothingRadius = 5; 
     const double kHorizontalCropRatio = 0.1;
     const double kVertialCropRatio = 0.1;
 };

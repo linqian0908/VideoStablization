@@ -58,8 +58,8 @@ cv::Mat& visualise_tracking(cv::Mat& captured_image, const LandmarkDetector::CLN
         return captured_image;
 }
 
-VideoStablizer::VideoStablizer( std::string path )
-    : _path( path )
+VideoStablizer::VideoStablizer( std::string path, double salient )
+    : _path( path ), SmoothRatio(salient)
 {
 
 }
@@ -79,14 +79,21 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     int kHorizontalBorderCrop = int(image_width*kHorizontalCropRatio);  // Crops the border to reduce missing pixels.
     int kVerticalBorderCrop = int(image_height*kVertialCropRatio);
     
-    
+    bool use_salient = (SmoothRatio>0.01);
+    if (use_salient) {
+        std::cout << "Using facial landmark with weight " << SmoothRatio << std::endl;
+    } else {
+        std::cout << "Not using facial landmark." << std::endl;
+    }
     /* copied from FaceLandmarkVid.cpp */
     // facial landmark tracking
+ 
     LandmarkDetector::FaceModelParameters det_parameters(arguments);
     LandmarkDetector::CLNF clnf_model(det_parameters.model_location);
     cv::Mat_<float> depth_image;
     cv::Point2d frame_center(image_width/2.0,image_height/2.0);
     det_parameters.track_gaze = false;
+    
     /* end copy */
     
     // Step 1 - Get previous to current frame transformation (dx, dy, da) for all frames
@@ -143,10 +150,10 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         double da = atan2( T.at<double>( 1, 0 ), T.at<double>( 0, 0 ) );
 
         prev_to_cur_transform.push_back( TransformParam( dx, dy, da ) );
-        
-        LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
-        landmarks.push_back(LandmarkDetector::CalculateLandmarks(clnf_model));
-        
+        if (use_salient) {
+            LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
+            landmarks.push_back(LandmarkDetector::CalculateLandmarks(clnf_model));
+        }
         
         cur.copyTo( prev );
         cur_grey.copyTo( prev_grey );
@@ -160,10 +167,11 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     double a = 0;
     double x = 0;
     double y = 0;
-    cv::Point2d point_zero(0.0,0.0);
-    cv::Point2d point_sum;
     
     std::vector<Trajectory> trajectory; // trajectory at all frames
+
+    cv::Point2d point_zero(0.0,0.0);
+    cv::Point2d point_sum;
     std::vector<cv::Point2d> landmarks_avg;
     
     for( size_t i = 0; i < prev_to_cur_transform.size(); i++ )
@@ -174,8 +182,10 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
 
         trajectory.push_back( Trajectory( x, y, a ) );
         
-        point_sum = std::accumulate(landmarks[i].begin(),landmarks[i].end(),point_zero);
-        landmarks_avg.push_back(point_sum*(1.0/landmarks[i].size()));
+        if (use_salient) {
+            point_sum = std::accumulate(landmarks[i].begin(),landmarks[i].end(),point_zero);
+            landmarks_avg.push_back(point_sum*(1.0/landmarks[i].size()));
+        }
     }
 
     // Step 3 - Smooth out the trajectory using an averaging window
@@ -205,26 +215,28 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         double avg_x = sum_x / count;
         double avg_y = sum_y / count;
         
-        cv::Point2d avg_fxy(0.0,0.0);
-        count = 0;
-        sum_x = 0;
-        sum_y = 0;
-        for (int j=-fSmoothingRadius; j<= fSmoothingRadius; j++) {
-            if (i+j>=0 && i+j<landmarks_avg.size()) {
-                sum_x += trajectory[i+j]._x;
-                sum_y += trajectory[i+j]._y;
-                avg_fxy += landmarks_avg[i+j];
-                count++;
+        if (use_salient) {
+            cv::Point2d avg_fxy(0.0,0.0);
+            count = 0;
+            sum_x = 0;
+            sum_y = 0;
+            for (int j=-fSmoothingRadius; j<= fSmoothingRadius; j++) {
+                if (i+j>=0 && i+j<landmarks_avg.size()) {
+                    sum_x += trajectory[i+j]._x;
+                    sum_y += trajectory[i+j]._y;
+                    avg_fxy += landmarks_avg[i+j];
+                    count++;
+                }
             }
+            
+            sum_x /= count;
+            sum_y /= count;
+            avg_fxy *= (1.0/count);
+            avg_fxy -= frame_center;
+            
+            avg_x = avg_x*(1-SmoothRatio) + (sum_x-avg_fxy.x)*SmoothRatio;
+            avg_y = avg_y*(1-SmoothRatio) + (sum_y-avg_fxy.y)*SmoothRatio;
         }
-        
-        sum_x /= count;
-        sum_y /= count;
-        avg_fxy *= (1.0/count);
-        avg_fxy -= frame_center;
-        
-        avg_x = avg_x*(1-SmoothRatio) + (sum_x-avg_fxy.x)*SmoothRatio;
-        avg_y = avg_y*(1-SmoothRatio) + (sum_y-avg_fxy.y)*SmoothRatio;
         smoothed_trajectory.push_back( Trajectory( avg_x, avg_y, avg_a ) );
     }
 
@@ -299,13 +311,15 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         cv::resize( cur2, cur2, cur.size() );
         
         /* face feature detection */
-        cv::cvtColor( cur, cur_grey, cv::COLOR_BGR2GRAY );
-        LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
-        cur = visualise_tracking(cur, clnf_model, det_parameters);
-        
-        cv::cvtColor( cur2, cur_grey, cv::COLOR_BGR2GRAY );
-        LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
-        cur2 = visualise_tracking(cur2, clnf_model, det_parameters);        
+        if (use_salient) {
+            cv::cvtColor( cur, cur_grey, cv::COLOR_BGR2GRAY );
+            LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
+            cur = visualise_tracking(cur, clnf_model, det_parameters);
+            
+            //cv::cvtColor( cur2, cur_grey, cv::COLOR_BGR2GRAY );
+            //LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
+            //cur2 = visualise_tracking(cur2, clnf_model, det_parameters); 
+        }       
         /* end face feature detection */
         
         // Now draw the original and stablised side by side for coolness
@@ -332,15 +346,23 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
 int main (int argc, char **argv)
 {
 	vector<string> arguments = get_arguments(argc, argv);
+	double SmoothRatio = 0; // SmoothRatio=1 tries to keep face at center; 0 uses pure path smoothing
+	for (size_t i=0;i<arguments.size();i++) {
+	    if (arguments[i].compare("-salient")==0) {
+	        stringstream data(arguments[i+1]);
+	        data >> SmoothRatio;
+			break;	        
+	    }
+	}
 	vector<string> files, depth_directories, output_video_files, out_dummy;
 	bool u;
 	LandmarkDetector::get_video_input_output_params(files, depth_directories, out_dummy, output_video_files, u, arguments);
 	std::string input_path, output_path;
-	for (int i=0;i<files.size();i++) {
+	for (size_t i=0;i<files.size();i++) {
 	    input_path = files[i];
 	    output_path = input_path.substr(0,input_path.length()-4)+"_stable.avi";
 	    std::cout<<output_path<<std::endl;    
-	    VideoStablizer vs(input_path);
+	    VideoStablizer vs(input_path,SmoothRatio);
 	    vs.run(output_path,arguments);
 	}
 }
