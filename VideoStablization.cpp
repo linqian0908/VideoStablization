@@ -828,6 +828,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     std::vector< vector<cv::Point2d> > landmarks_after; // facial landmarks for each frame after smoothing
     while( k < max_frames - 1 ) // don't process the very last frame, no valid transform
     {
+
         cap >> cur;
         if( cur.data == NULL ) { break; }
 
@@ -848,8 +849,8 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
 
         // Resize cur2 back to cur size, for better side by side comparison
         cv::resize( cur2, cur2, cur.size() );
-        //outputVideo << cur2;
-        
+        outputVideo << cur2;
+
         /* face feature detection */
         if (use_salient) {
             cv::cvtColor( cur, cur_grey, cv::COLOR_BGR2GRAY );
@@ -858,7 +859,6 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
             
             cv::cvtColor( cur2, cur_grey, cv::COLOR_BGR2GRAY );
             LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
-
 
             // fun add-ons
             int n = clnf_model.patch_experts.visibilities[0][0].rows;
@@ -886,7 +886,6 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
             landmarks_after.push_back(LandmarkDetector::CalculateLandmarks(clnf_model));
         }       
         /* end face feature detection */
-
         // Now draw the original and stablised side by side for coolness
         cv::Mat canvas = cv::Mat::zeros( cur.rows, cur.cols * 2 + 10, cur.type() );
         cur = visualise_frame(cur);
