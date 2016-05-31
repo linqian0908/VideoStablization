@@ -220,10 +220,19 @@ public:
     VideoStablizer(std::string filepath, double salient, double crop, int pathradius, int faceradius );
 
     bool                            run(std::string output_path, vector<string> arguments);
-
+    void                            addHat( cv::Mat & cur2, vector<cv::Vec2f> & landmarks );
+    void                            addPNG( int x0, int y0, cv::Mat & cur2, cv::Mat & pic, cv::Mat & alpha );
+    void                            overlayImg( int x0, int y0, cv::Mat & cur2, cv::Mat pic, cv::Mat & alpha );
+    void                            addGlasses(cv::Mat & cur2, vector<cv::Vec2f> & landmarks );
 private:
 
     std::vector<TransformParam>     estimateTransform();
+    void                            rotateFigure( const cv::Mat & fig_in,
+                                                  const cv::Mat & alpha_in,
+                                                  cv::Mat & fig_out,
+                                                  cv::Mat & alpha_out,
+                                                  cv::Vec2f & pt_left,
+                                                  cv::Vec2f & pt_right );
 
     std::string                     _path;
     int                             _num_frames;

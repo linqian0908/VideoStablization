@@ -766,7 +766,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     CvPlot::plot("track_angle", &Ta_smooth[0], Ta_smooth.size(), 1, 0, 0, 255);
     CvPlot::label("After");
 
-    cv::waitKey( 14000 );
+    cv::waitKey( 100 );
 
     // Step 4 - Generate new set of previous to current transform, such that the trajectory ends up being the same as the smoothed trajectory
     std::cout << " Step 4: generate new transformations" << std::endl;
@@ -848,7 +848,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
 
         // Resize cur2 back to cur size, for better side by side comparison
         cv::resize( cur2, cur2, cur.size() );
-        outputVideo << cur2;
+        //outputVideo << cur2;
         
         /* face feature detection */
         if (use_salient) {
@@ -858,6 +858,28 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
             
             cv::cvtColor( cur2, cur_grey, cv::COLOR_BGR2GRAY );
             LandmarkDetector::DetectLandmarksInVideo(cur_grey, depth_image, clnf_model, det_parameters);
+
+
+            // fun add-ons
+            int n = clnf_model.patch_experts.visibilities[0][0].rows;
+
+            vector<cv::Vec2f> landmarks;
+            float x, y;
+            for( int i = 0; i < n; ++ i )
+            {
+                // Use matlab format, so + 1
+                x = clnf_model.detected_landmarks.at<double>( i ) + 1;
+                y = clnf_model.detected_landmarks.at<double>( i + n ) + 1;
+                cv::Vec2f landmark( x, y );
+                landmarks.push_back( landmark );
+            }
+
+            //addHat( cur2, landmarks );
+            addGlasses(cur2, landmarks);
+
+            // end of fun add-ons
+
+
             cur2 = visualise_tracking(cur2, clnf_model, det_parameters); 
 
             // Calculate average and get the center of face, then plot
@@ -882,7 +904,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         //}
 
         cv::imshow( "before and after", canvas );
-        cv::waitKey( 3 );
+        cv::waitKey( 300 );
 
         k++;
     }
@@ -931,6 +953,156 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     }
     return 0;
 }
+
+void VideoStablizer::addPNG( int x0, int y0, cv::Mat & cur2, cv::Mat & pic, cv::Mat & alpha )
+{
+    for( int i = 0; i < pic.cols; i++ )
+    {
+        for( int j = 0; j < pic.rows; j++ )
+        {
+            if( alpha.at<uchar>( j, i ) > 240 )
+            {
+                cur2.at<cv::Vec3b>( y0 + j, x0 + i ) = pic.at<cv::Vec3b>( j, i );
+            }
+
+        }
+    }
+}
+
+
+// x0,y0: index in original image coordinate system
+void VideoStablizer::overlayImg( int x0, int y0, cv::Mat & cur2, cv::Mat pic, cv::Mat & alpha )
+{
+    cv::Mat cropedPic;
+    cv::Mat cropedAlpha;
+
+    if( y0 < 0 )
+    {
+        int height = pic.rows + y0;
+        cropedPic = pic( cv::Rect( 0, -y0, pic.cols, height ) );
+        cropedAlpha = alpha( cv::Rect( 0, -y0, pic.cols, height ) );
+        y0 = 0;
+        pic = cropedPic;
+        alpha = cropedAlpha;
+
+    }
+
+    if( x0 < 0 )
+    {
+        int width = pic.cols + x0;
+        pic = pic( cv::Rect( -x0, 0, width, pic.rows ) );
+        alpha = alpha( cv::Rect( -x0, 0, width, pic.rows ) );
+        x0 = 0;
+        pic = cropedPic;
+        alpha = cropedAlpha;
+    }
+    addPNG( x0, y0, cur2, pic, alpha );
+
+
+}
+
+
+
+void VideoStablizer::rotateFigure( const cv::Mat & fig_in,
+                                   const cv::Mat & alpha_in,
+                                   cv::Mat & fig_out,
+                                   cv::Mat & alpha_out,
+                                   cv::Vec2f & pt_left,
+                                   cv::Vec2f & pt_right )
+{
+    cv::Vec2f dif = pt_right - pt_left;
+    double angle = std::atan2( -dif[1], dif[0] ) * 180 / 3.1415;
+
+    cv::Point2f fig_center( fig_in.cols / 2.0F, fig_in.rows / 2.0F);
+    cv::Mat rot_mat = getRotationMatrix2D( fig_center, angle, 1.0 );
+
+    cv::warpAffine( fig_in, fig_out, rot_mat, fig_in.size() );
+    cv::warpAffine( alpha_in, alpha_out, rot_mat, alpha_in.size() );
+}
+
+
+
+void VideoStablizer::addHat( cv::Mat & cur2, vector<cv::Vec2f> & landmarks )
+{
+
+    cv::Mat hat_0 = cv::imread( "/home/memgrapher/OpenFace/exe/VideoStablization/img/hat.png", cv::IMREAD_UNCHANGED );
+    cv::Mat hat = cv::imread( "/home/memgrapher/OpenFace/exe/VideoStablization/img/hat.png" );
+    cv::Mat ch[4];
+    split( hat_0, ch );
+    cv::Mat alpha = ch[3];
+    cv::Mat hat_resize, alpha_resize;
+    cv::Vec2f faceLeft = landmarks[0];
+    cv::Vec2f faceRight = landmarks[16];
+    float faceWidth = cv::norm( faceRight - faceLeft );
+
+
+    cv::Vec2f noseTop = landmarks[27];
+    cv::Vec2f noseBottom = landmarks[33];
+    float noseLength = cv::norm( noseTop - noseBottom );
+
+    cv::Vec2f eyeLeft = landmarks[36];
+    cv::Vec2f eyeRight = landmarks[45];
+
+    float eyeWidth = cv::norm( eyeLeft - eyeRight );
+    float hatWidth = eyeWidth * 3;
+    float ratio = hatWidth / hat.cols;
+
+    cv::resize( hat, hat_resize, cv::Size2i( std::round( hat.cols * ratio ), std::round( hat.rows * ratio ) ) );
+    cv::resize( alpha, alpha_resize, hat_resize.size() );
+
+    cv::Mat hat_rot, alpha_rot;
+    rotateFigure( hat_resize, alpha_resize, hat_rot, alpha_rot, eyeLeft, eyeRight );
+
+
+    cv::Vec2f noseLine = noseTop - noseBottom;
+    cv::Vec2f direction = noseLine / noseLength;
+    std::cout << "direct: " << direction[0] << " " << direction[1] << std::endl;
+    int x0 = (noseTop[0] ) + noseLine[0] - hat_resize.cols/2;
+    int y0 = (noseTop[1] ) + noseLine[1] - hat_resize.rows*0.85;
+    overlayImg( x0, y0, cur2, hat_rot, alpha_rot );
+
+}
+
+void VideoStablizer::addGlasses(cv::Mat & cur2, vector<cv::Vec2f> & landmarks )
+{
+
+    cv::Mat hat_0 = cv::imread( "/home/memgrapher/OpenFace/exe/VideoStablization/img/glasses.png", cv::IMREAD_UNCHANGED );
+    cv::Mat hat = cv::imread( "/home/memgrapher/OpenFace/exe/VideoStablization/img/glasses.png" );
+    cv::Mat ch[4];
+    split( hat_0, ch );
+    cv::Mat alpha = ch[3];
+    cv::Mat hat_resize, alpha_resize;
+
+    cv::Vec2f noseTop = landmarks[27];
+    cv::Vec2f noseBottom = landmarks[33];
+    float noseLength = cv::norm( noseTop - noseBottom );
+
+    cv::Vec2f eyeLeft = landmarks[36];
+    cv::Vec2f eyeRight = landmarks[45];
+
+    float eyeWidth = cv::norm( eyeLeft - eyeRight );
+    float hatWidth = eyeWidth * 1.5;
+    float ratio = hatWidth / hat.cols;
+
+    cv::resize( hat, hat_resize, cv::Size2i( std::round( hat.cols * ratio ), std::round( hat.rows * ratio ) ) );
+    cv::resize( alpha, alpha_resize, hat_resize.size() );
+
+    cv::Mat hat_rot, alpha_rot;
+    rotateFigure( hat_resize, alpha_resize, hat_rot, alpha_rot, eyeLeft, eyeRight );
+
+
+    cv::Vec2f noseLine = noseTop - noseBottom;
+    cv::Vec2f direction = noseLine / noseLength;
+
+    int x0 = (noseTop[0] ) + noseLine[0]/3 - hat_resize.cols/2;
+    int y0 = (noseTop[1] ) + noseLine[1]/3;
+
+    overlayImg( x0, y0, cur2, hat_rot, alpha_rot );
+
+}
+
+
+
 
 int main (int argc, char **argv)
 {
