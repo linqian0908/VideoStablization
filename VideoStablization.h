@@ -23,11 +23,10 @@ struct TransformParam
     TransformParam( double dx,
                     double dy,
                     double da )
-    {
-        _dx = dx;
-        _dy = dy;
-        _da = da;
-    }
+        : _dx( dx )
+        , _dy( dy )
+        , _da( da )
+    { }
 
     double _dx = 0.0f;
     double _dy = 0.0f;
@@ -42,11 +41,11 @@ struct Trajectory
     Trajectory( double x,
                 double y,
                 double a )
-    {
-        _x = x;
-        _y = y;
-        _a = a;
-    }
+        : _x( x )
+        , _y( y )
+        , _a( a )
+    { }
+
     // "+"
     friend Trajectory operator+( const Trajectory & c1, const Trajectory & c2 )
     {
@@ -86,16 +85,18 @@ struct Trajectory
     double _a; // angle
 };
 
+
+
 class VideoStablizer
 {
 public:
-    VideoStablizer(std::string filepath, double salient, double crop, int pathradius, int faceradius );
+    VideoStablizer( std::string filepath, double salient, double crop, int pathradius, int faceradius );
 
-    bool                            run(std::string output_path, vector<string> arguments);
+    bool                            run( std::string output_path, vector<string> arguments );
     void                            addHat( cv::Mat & cur2, vector<cv::Vec2f> & landmarks );
     void                            addPNG( int x0, int y0, cv::Mat & cur2, cv::Mat & pic, cv::Mat & alpha );
     void                            overlayImg( int x0, int y0, cv::Mat & cur2, cv::Mat pic, cv::Mat & alpha );
-    void                            addGlasses(cv::Mat & cur2, vector<cv::Vec2f> & landmarks );
+    void                            addGlasses( cv::Mat & cur2, vector<cv::Vec2f> & landmarks );
 private:
 
     std::vector<TransformParam>     estimateTransform();
@@ -108,11 +109,12 @@ private:
 
     std::string                     _path;
     int                             _num_frames;
-    double                          SmoothRatio; // SmoothRatio=1 tries to keep face at center; 0 uses pure path smoothing
-    double                          CropRatio;
-    
-    int                             kSmoothingRadius; // Large values give more stable video, but less flexible to sudden panning
-    int                             fSmoothingRadius;
+    double                          _smooth_ratio; // SmoothRatio=1 tries to keep face at center; 0 uses pure path smoothing
+    double                          _crop_ratio;
+
+    int                             _path_smoothing_radius;
+    // Large values give more stable video, but less flexible to sudden panning
+    int                             _face_smoothing_radius;
 };
 
 #endif // VIDEOSTAB_H

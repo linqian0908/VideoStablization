@@ -60,9 +60,16 @@ cv::Mat & visualise_frame( cv::Mat & captured_image )
     return captured_image;
 }
 
-VideoStablizer::VideoStablizer( std::string path, double salient, double crop, int pathradius, int faceradius )
-    : _path( path ), SmoothRatio( salient ), CropRatio( crop ), kSmoothingRadius( pathradius ),
-      fSmoothingRadius( faceradius )
+VideoStablizer::VideoStablizer( std::string path,
+                                double salient,
+                                double crop,
+                                int pathradius,
+                                int faceradius )
+    : _path( path )
+    , _smooth_ratio( salient )
+    , _crop_ratio( crop )
+    , _path_smoothing_radius( pathradius )
+    , _face_smoothing_radius( faceradius )
 {
 
 }
@@ -79,8 +86,8 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     int image_width = prev.cols;
     int image_height = prev.rows;
     cv::cvtColor( prev, prev_grey, cv::COLOR_BGR2GRAY );
-    int kHorizontalBorderCrop = int( image_width * CropRatio ); // Crops the border to reduce missing pixels.
-    int kVerticalBorderCrop = int( image_height * CropRatio );
+    int kHorizontalBorderCrop = int( image_width * _crop_ratio ); // Crops the border to reduce missing pixels.
+    int kVerticalBorderCrop = int( image_height * _crop_ratio );
 
     /* copied from FaceLandmarkVid.cpp */
     // facial landmark tracking
@@ -106,17 +113,17 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
     std::cout << "Image height: " << image_height << std::endl;
     std::cout << "Crop width: " << kHorizontalBorderCrop << std::endl;
     std::cout << "Crop height: " << kVerticalBorderCrop << std::endl;
-    std::cout << "Path smoothing radius: " << kSmoothingRadius << std::endl;
-    std::cout << "Face smoothing radius: " << fSmoothingRadius << std::endl;
+    std::cout << "Path smoothing radius: " << _path_smoothing_radius << std::endl;
+    std::cout << "Face smoothing radius: " << _face_smoothing_radius << std::endl;
 
-    bool use_salient = ( SmoothRatio > 0.01 );
+    bool use_salient = ( _smooth_ratio > 0.01 );
     if( use_salient )
     {
-        std::cout << "Using facial landmark with weight " << SmoothRatio << std::endl;
+        std::cout << "Using facial landmark with weight " << _smooth_ratio << std::endl;
     }
     else
     {
-        std::cout << "Not using facial landmark. " << SmoothRatio << std::endl;
+        std::cout << "Not using facial landmark. " << _smooth_ratio << std::endl;
     }
 
     std::cout << " Step 1: get frame transformation and salient points" << std::endl;
@@ -220,7 +227,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
         double sum_a = 0;
         int count = 0;
 
-        for( int j = -kSmoothingRadius; j <= kSmoothingRadius; j++ )
+        for( int j = -_path_smoothing_radius; j <= _path_smoothing_radius; j++ )
         {
             if( i + j >= 0 && i + j < trajectory.size() )
             {
@@ -242,7 +249,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
             count = 0;
             sum_x = 0;
             sum_y = 0;
-            for( int j = -fSmoothingRadius; j <= fSmoothingRadius; j++ )
+            for( int j = -_face_smoothing_radius; j <= _face_smoothing_radius; j++ )
             {
                 if( i + j >= 0 && i + j < landmarks_avg.size() )
                 {
@@ -259,8 +266,8 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
             avg_fxy -= frame_center;
             Tfx.push_back( avg_fxy.x );
             Tfy.push_back( avg_fxy.y );
-            avg_x = avg_x * ( 1 - SmoothRatio ) + ( sum_x - avg_fxy.x ) * SmoothRatio;
-            avg_y = avg_y * ( 1 - SmoothRatio ) + ( sum_y - avg_fxy.y ) * SmoothRatio;
+            avg_x = avg_x * ( 1 - _smooth_ratio ) + ( sum_x - avg_fxy.x ) * _smooth_ratio;
+            avg_y = avg_y * ( 1 - _smooth_ratio ) + ( sum_y - avg_fxy.y ) * _smooth_ratio;
         }
         smoothed_trajectory.push_back( Trajectory( avg_x, avg_y, avg_a ) );
         Tx_smooth.push_back( avg_x );
@@ -445,7 +452,7 @@ bool VideoStablizer::run( std::string output_path, vector<string> arguments )
             int count = 0;
             cv::Point2d avg_fxy_after( 0.0, 0.0 );
 
-            for( int j = -fSmoothingRadius; j <= fSmoothingRadius; j++ )
+            for( int j = -_face_smoothing_radius; j <= _face_smoothing_radius; j++ )
             {
                 if( i + j >= 0 && i + j < landmarks_avg_after.size() )
                 {
