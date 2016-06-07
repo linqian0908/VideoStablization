@@ -7,7 +7,7 @@
 | `videostablization.pro`| Qt project files |
 | `common.pri`, `libstablization.pro`,`stablization_test.pro` | more Qt project files |
 
-Dependency: lp-solve, opencv3.0, cvplot
+Dependency: lp-solve, opencv3.0, cvplot (has been copy-paste into videostab.cpp[h] so no need for extenral lib)
 
 Using lp-solve:
 
@@ -27,7 +27,7 @@ Using lp-solve:
     
     DEPENDPATH  += /home/memgrapher/Code/lp_solve_5.5
     
-## RCode for L2 video smoothing,face saliency constraint and face decoration
+## Code for L2 video smoothing,face saliency constraint and face decoration
 
 | file | description |
 | --- | --- |
