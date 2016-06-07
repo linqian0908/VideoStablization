@@ -1,4 +1,4 @@
-## Repository contents for L1 Path Smoothing for Video Optimization
+## Code for L1 Path Smoothing for Video Optimization
 
 | file | description |
 | --- | --- |
@@ -27,7 +27,7 @@ Using lp-solve:
     
     DEPENDPATH  += /home/memgrapher/Code/lp_solve_5.5
     
-## Repository contents for L2 video smoothing,face saliency constraint and face decoration
+## RCode for L2 video smoothing,face saliency constraint and face decoration
 
 | file | description |
 | --- | --- |
@@ -43,8 +43,9 @@ download OpenFace from https://github.com/TadasBaltrusaitis/OpenFace and follow 
 
 | file | description |
 | --- | --- |
-| `SANY0025.avi`, `gleicher1.m4` | example shaky video |
+| `video-stabilization-face.pdf` | report. including links to Youtube video of algorithm output |
 | `L1-X.png`, `L1-Y.png`, `L1-Angle.png` | L1-optimized path from running videostab on SANY0025.avi. Note to TA and Instructor: the figure in our report submitted on Gradescope is incorrect. These are the correct version |
+| `SANY0025.avi`, `gleicher1.m4` | example shaky video |
 
 ## L1 usage
 
