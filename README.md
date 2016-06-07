@@ -47,6 +47,8 @@ download OpenFace from https://github.com/TadasBaltrusaitis/OpenFace and follow 
 | `L1-X.png`, `L1-Y.png`, `L1-Angle.png` | L1-optimized path from running videostab on SANY0025.avi. Note to TA and Instructor: the figure in our report submitted on Gradescope is incorrect. These are the correct version |
 
 ## Data files (in data folder
+| file | description |
+| --- | --- |
 | `SANY0025.avi`, `gleicher1.mp4`, `gleicher2.mp4`,`new_gleicher.mp4` | example shaky video. obtained from http://www.cc.gatech.edu/cpl/projects/videostabilization/. |
 |`SANY0025_warp.avi`,`new_gleicher_warp.avi`| output of our L1 path smoothing algorithm |
 
