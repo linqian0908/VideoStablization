@@ -22,7 +22,9 @@ Using lp-solve:
     in qt, change the following lines in libstablization.pro to actual lp_solve_5.5 path
 
     LIBS += -L"/home/memgrapher/Code/lp_solve_5.5/lpsolve55/bin/ux64/" -llpsolve55
+    
     INCLUDEPATH += /home/memgrapher/Code/lp_solve_5.5
+    
     DEPENDPATH  += /home/memgrapher/Code/lp_solve_5.5
     
 ## Repository contents for L2 video smoothing,face saliency constraint and face decoration
