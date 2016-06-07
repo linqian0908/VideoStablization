@@ -47,11 +47,11 @@ download OpenFace from https://github.com/TadasBaltrusaitis/OpenFace and follow 
 | `L1-X.png`, `L1-Y.png`, `L1-Angle.png` | L1-optimized path from running videostab on SANY0025.avi. Note to TA and Instructor: the figure in our report submitted on Gradescope is incorrect. These are the correct version |
 | `SANY0025.avi`, `gleicher1.m4` | example shaky video |
 
-## L1 usage
+## L1 path smoothing (videostab.cpp) usage
 
 put videostab.cpp[h] and stablization_test.cpp in videostab/, and import videostab.pro into Qt. Change input and output file path in stablization_test.cpp.
 
-## VideoStablization usage
+## VideoStablization (L2, face salient constraint, face decoration) usage
 
 in build folder, run make, and then
 
