@@ -2,10 +2,10 @@
 
 | file | description |
 | --- | --- |
-| 'videostab.cpp[h]' | the main function for running L1 path smoothing |
-| 'stablization_test.cpp' | runs videostab |
-| 'videostablization.pro'| Qt project files |
-| 'common.pri', 'libstablization.pro','stablization_test.pro' | more Qt project files |
+| `videostab.cpp[h]` | the main function for running L1 path smoothing |
+| `stablization_test.cpp` | runs videostab |
+| `videostablization.pro`| Qt project files |
+| `common.pri`, `libstablization.pro`,`stablization_test.pro` | more Qt project files |
 
 Dependency: lp-solve, opencv3.0, cvplot
 
@@ -43,8 +43,8 @@ download OpenFace from https://github.com/TadasBaltrusaitis/OpenFace and follow 
 
 | file | description |
 | --- | --- |
-| `SANY0025.avi`, 'gleicher1.m4' | example shaky video |
-| `L1-X.png`, 'L1-Y.png', 'L1-Angle.png' | L1-optimized path from running videostab on SANY0025.avi. Note to TA and Instructor: the figure in our report submitted on Gradescope is incorrect. These are the correct version |
+| `SANY0025.avi`, `gleicher1.m4` | example shaky video |
+| `L1-X.png`, `L1-Y.png`, `L1-Angle.png` | L1-optimized path from running videostab on SANY0025.avi. Note to TA and Instructor: the figure in our report submitted on Gradescope is incorrect. These are the correct version |
 
 ## L1 usage
 
