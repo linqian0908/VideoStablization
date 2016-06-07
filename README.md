@@ -56,6 +56,8 @@ download OpenFace from https://github.com/TadasBaltrusaitis/OpenFace and follow 
 
 put videostab.cpp[h] and stablization_test.cpp in videostab/, and import videostab.pro into Qt. Change input and output file path in stablization_test.cpp.
 
+lp-solver run time is 6s for 330 frames, 12s for 450 frames.
+
 ## VideoStablization (L2, face salient constraint, face decoration) usage
 
 in build folder, run make, and then
